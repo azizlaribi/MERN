@@ -9,13 +9,16 @@ import {
 } from 'react-icons/fa';
 import { authService } from '../../services/authService';
 import { userService } from '../../services/Userservice';
-import type { User } from '../../services/Userservice';
+import type { User, UserStats } from '../../services/Userservice';
 import Sidebar from '../../components/Sidebar';
 
 const Profile: React.FC = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Stats
+  const [stats, setStats] = useState<UserStats | null>(null);
 
   // Edit profile modal
   const [showEditModal, setShowEditModal] = useState(false);
@@ -24,15 +27,33 @@ const Profile: React.FC = () => {
   const [editError, setEditError] = useState('');
   const [editSuccess, setEditSuccess] = useState('');
 
+  // Photo upload
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoLoading, setPhotoLoading] = useState(false);
+
   // Change password modal
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ current: '', next: '', confirm: '' });
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [passwordLoading, setPasswordLoading] = useState(false);
 
   // Delete account modal
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // Preferences modal
+  const [showPreferencesModal, setShowPreferencesModal] = useState(false);
+  const [prefsForm, setPrefsForm] = useState({
+    emailNotifications: true,
+    language: 'English' as 'English' | 'French' | 'Arabic',
+    privacy: 'Friends only' as 'Public' | 'Friends only' | 'Private',
+  });
+  const [prefsLoading, setPrefsLoading] = useState(false);
+  const [prefsError, setPrefsError] = useState('');
+  const [prefsSuccess, setPrefsSuccess] = useState('');
 
   // Emergency contact (local state / placeholder)
   const [emergencyContact, setEmergencyContact] = useState({ name: '', phone: '', relation: '' });
@@ -46,6 +67,7 @@ const Profile: React.FC = () => {
       return;
     }
     loadUser();
+    loadStats();
   }, [navigate]);
 
   const loadUser = async () => {
@@ -60,6 +82,13 @@ const Profile: React.FC = () => {
           lastname: fetched.lastname,
           phone: fetched.phone ? String(fetched.phone) : '',
         });
+        if (fetched.preferences) {
+          setPrefsForm({
+            emailNotifications: fetched.preferences.emailNotifications,
+            language: fetched.preferences.language,
+            privacy: fetched.preferences.privacy,
+          });
+        }
       }
     } catch {
       // Fallback to localStorage data
@@ -76,6 +105,15 @@ const Profile: React.FC = () => {
       setEditForm({ firstname, lastname: rest.join(' '), phone: '' });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadStats = async () => {
+    try {
+      const s = await userService.getUserStats();
+      setStats(s);
+    } catch {
+      // silently fail — stats stay null
     }
   };
 
@@ -107,6 +145,24 @@ const Profile: React.FC = () => {
     setEditError('');
     setEditSuccess('');
     try {
+      // Upload photo first if selected
+      if (photoFile) {
+        setPhotoLoading(true);
+        try {
+          const photoResult = await userService.uploadPhoto(photoFile);
+          setUser(photoResult.user);
+          setPhotoFile(null);
+          setPhotoPreview(null);
+        } catch {
+          setEditError('Failed to upload photo. Please try again.');
+          setEditLoading(false);
+          setPhotoLoading(false);
+          return;
+        } finally {
+          setPhotoLoading(false);
+        }
+      }
+
       const updated = await userService.editUser(user._id, {
         firstname: editForm.firstname,
         lastname: editForm.lastname,
@@ -123,6 +179,15 @@ const Profile: React.FC = () => {
     }
   };
 
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhotoFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => setPhotoPreview(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
   /* ── Change password ── */
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -136,21 +201,49 @@ const Profile: React.FC = () => {
       setPasswordError('Password must be at least 6 characters.');
       return;
     }
-    // Note: password-change endpoint not yet available — show informational message
-    setPasswordSuccess('Password change request received. This feature will be enabled once the backend endpoint is available.');
-    setPasswordForm({ current: '', next: '', confirm: '' });
+    setPasswordLoading(true);
+    try {
+      const result = await userService.changePassword(passwordForm.current, passwordForm.next);
+      setPasswordSuccess(result.message);
+      setPasswordForm({ current: '', next: '', confirm: '' });
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setPasswordError(msg || 'Failed to change password. Please try again.');
+    } finally {
+      setPasswordLoading(false);
+    }
   };
 
   /* ── Delete account ── */
   const handleDeleteAccount = async () => {
     if (!user) return;
     setDeleteError('');
+    setDeleteLoading(true);
     try {
-      await userService.deleteUser(user._id);
+      await userService.deleteOwnAccount();
       authService.logout();
       navigate('/login');
     } catch {
       setDeleteError('Failed to delete account. Please try again or contact support.');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  /* ── Preferences ── */
+  const handlePrefsSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPrefsError('');
+    setPrefsSuccess('');
+    setPrefsLoading(true);
+    try {
+      const result = await userService.updatePreferences(prefsForm);
+      setUser(result.user);
+      setPrefsSuccess('Preferences saved successfully!');
+    } catch {
+      setPrefsError('Failed to save preferences. Please try again.');
+    } finally {
+      setPrefsLoading(false);
     }
   };
 
@@ -260,10 +353,10 @@ const Profile: React.FC = () => {
           {/* ── Stats Row ── */}
           <Row className="g-4 mb-5">
             {[
-              { icon: <FaCar size={26} className="text-danger" />, bg: 'bg-danger', label: 'Trips Created', value: '—' },
-              { icon: <FaRoute size={26} className="text-success" />, bg: 'bg-success', label: 'Trips Taken', value: '—' },
-              { icon: <FaMoneyBillWave size={26} className="text-warning" />, bg: 'bg-warning', label: 'Total Savings', value: '— TND' },
-              { icon: <FaStar size={26} className="text-info" />, bg: 'bg-info', label: 'Rating', value: '—' },
+              { icon: <FaCar size={26} className="text-danger" />, bg: 'bg-danger', label: 'Trips Created', value: stats ? String(stats.tripsCreated) : '—' },
+              { icon: <FaRoute size={26} className="text-success" />, bg: 'bg-success', label: 'Trips Taken', value: stats ? String(stats.tripsTaken) : '—' },
+              { icon: <FaMoneyBillWave size={26} className="text-warning" />, bg: 'bg-warning', label: 'Total Savings', value: stats ? `${stats.totalSavings.toFixed(2)} TND` : '— TND' },
+              { icon: <FaStar size={26} className="text-info" />, bg: 'bg-info', label: 'Rating', value: stats?.rating ? `${stats.rating} / 5` : '—' },
             ].map((s, i) => (
               <Col key={i} lg={3} md={6}>
                 <Card className="border-0 shadow-sm h-100" style={{ borderRadius: '20px', transition: 'transform 0.3s', cursor: 'default' }}
@@ -354,11 +447,16 @@ const Profile: React.FC = () => {
             <Col lg={6}>
               <Card className="border-0 shadow-sm h-100" style={{ borderRadius: '20px' }}>
                 <Card.Body className="p-4">
-                  <h5 className="fw-bold mb-4"><FaBell className="text-danger me-2" />Preferences</h5>
+                  <div className="d-flex justify-content-between align-items-center mb-4">
+                    <h5 className="fw-bold mb-0"><FaBell className="text-danger me-2" />Preferences</h5>
+                    <Button variant="outline-danger" size="sm" style={{ borderRadius: '10px' }} onClick={() => setShowPreferencesModal(true)}>
+                      <FaEdit className="me-1" /> Edit
+                    </Button>
+                  </div>
                   {[
-                    { icon: <FaBell className="text-warning" />, label: 'Email Notifications', value: 'Enabled' },
-                    { icon: <FaLanguage className="text-success" />, label: 'Language', value: 'English' },
-                    { icon: <FaShieldAlt className="text-info" />, label: 'Privacy', value: 'Friends only' },
+                    { icon: <FaBell className="text-warning" />, label: 'Email Notifications', value: user?.preferences?.emailNotifications !== undefined ? (user.preferences.emailNotifications ? 'Enabled' : 'Disabled') : 'Enabled' },
+                    { icon: <FaLanguage className="text-success" />, label: 'Language', value: user?.preferences?.language || 'English' },
+                    { icon: <FaShieldAlt className="text-info" />, label: 'Privacy', value: user?.preferences?.privacy || 'Friends only' },
                   ].map((row, i) => (
                     <div key={i} className="d-flex align-items-center justify-content-between py-2 border-bottom border-light">
                       <div className="d-flex align-items-center gap-2">
@@ -417,7 +515,7 @@ const Profile: React.FC = () => {
       </div>
 
       {/* ── Edit Profile Modal ── */}
-      <Modal show={showEditModal} onHide={() => { setShowEditModal(false); setEditError(''); setEditSuccess(''); }} centered>
+      <Modal show={showEditModal} onHide={() => { setShowEditModal(false); setEditError(''); setEditSuccess(''); setPhotoFile(null); setPhotoPreview(null); }} centered>
         <Modal.Header closeButton style={{ borderBottom: '1px solid #eee' }}>
           <Modal.Title className="fw-bold"><FaEdit className="text-danger me-2" />Edit Profile</Modal.Title>
         </Modal.Header>
@@ -425,6 +523,39 @@ const Profile: React.FC = () => {
           <Modal.Body className="p-4">
             {editError && <Alert variant="danger">{editError}</Alert>}
             {editSuccess && <Alert variant="success">{editSuccess}</Alert>}
+
+            {/* Photo upload */}
+            <Form.Group className="mb-4 text-center">
+              <div className="mb-2">
+                {(photoPreview || user?.picture) ? (
+                  <img
+                    src={photoPreview || user?.picture}
+                    alt="Preview"
+                    style={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover', border: '3px solid #dc3545' }}
+                  />
+                ) : (
+                  <div style={{
+                    width: 80, height: 80, borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #dc3545, #c82333)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 28, fontWeight: 700, color: 'white', margin: '0 auto',
+                  }}>
+                    {initials}
+                  </div>
+                )}
+              </div>
+              <Form.Label className="btn btn-outline-danger btn-sm" style={{ borderRadius: '10px', cursor: 'pointer' }}>
+                {photoLoading ? 'Uploading…' : 'Change Photo'}
+                <Form.Control
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                  onChange={handlePhotoChange}
+                  style={{ display: 'none' }}
+                />
+              </Form.Label>
+              {photoFile && <small className="d-block text-muted mt-1">{photoFile.name}</small>}
+            </Form.Group>
+
             <Form.Group className="mb-3">
               <Form.Label>First Name</Form.Label>
               <Form.Control
@@ -456,9 +587,9 @@ const Profile: React.FC = () => {
             </Form.Group>
           </Modal.Body>
           <Modal.Footer>
-            <Button variant="secondary" style={{ borderRadius: '10px' }} onClick={() => setShowEditModal(false)}>Cancel</Button>
-            <Button variant="danger" type="submit" style={{ borderRadius: '10px' }} disabled={editLoading}>
-              {editLoading ? 'Saving…' : 'Save Changes'}
+            <Button variant="secondary" style={{ borderRadius: '10px' }} onClick={() => { setShowEditModal(false); setPhotoFile(null); setPhotoPreview(null); }}>Cancel</Button>
+            <Button variant="danger" type="submit" style={{ borderRadius: '10px' }} disabled={editLoading || photoLoading}>
+              {editLoading || photoLoading ? 'Saving…' : 'Save Changes'}
             </Button>
           </Modal.Footer>
         </Form>
@@ -488,7 +619,9 @@ const Profile: React.FC = () => {
           </Modal.Body>
           <Modal.Footer>
             <Button variant="secondary" style={{ borderRadius: '10px' }} onClick={() => setShowPasswordModal(false)}>Cancel</Button>
-            <Button variant="danger" type="submit" style={{ borderRadius: '10px' }}>Change Password</Button>
+            <Button variant="danger" type="submit" style={{ borderRadius: '10px' }} disabled={passwordLoading}>
+              {passwordLoading ? 'Saving…' : 'Change Password'}
+            </Button>
           </Modal.Footer>
         </Form>
       </Modal>
@@ -533,8 +666,62 @@ const Profile: React.FC = () => {
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" style={{ borderRadius: '10px' }} onClick={() => { setShowDeleteModal(false); setDeleteError(''); }}>Cancel</Button>
-          <Button variant="danger" style={{ borderRadius: '10px' }} onClick={handleDeleteAccount}>Yes, Delete My Account</Button>
+          <Button variant="danger" style={{ borderRadius: '10px' }} onClick={handleDeleteAccount} disabled={deleteLoading}>
+            {deleteLoading ? 'Deleting…' : 'Yes, Delete My Account'}
+          </Button>
         </Modal.Footer>
+      </Modal>
+
+      {/* ── Preferences Modal ── */}
+      <Modal show={showPreferencesModal} onHide={() => { setShowPreferencesModal(false); setPrefsError(''); setPrefsSuccess(''); }} centered>
+        <Modal.Header closeButton>
+          <Modal.Title className="fw-bold"><FaBell className="text-danger me-2" />Edit Preferences</Modal.Title>
+        </Modal.Header>
+        <Form onSubmit={handlePrefsSubmit}>
+          <Modal.Body className="p-4">
+            {prefsError && <Alert variant="danger">{prefsError}</Alert>}
+            {prefsSuccess && <Alert variant="success">{prefsSuccess}</Alert>}
+            <Form.Group className="mb-3">
+              <Form.Check
+                type="switch"
+                id="emailNotifications"
+                label="Email Notifications"
+                checked={prefsForm.emailNotifications}
+                onChange={(e) => setPrefsForm({ ...prefsForm, emailNotifications: e.target.checked })}
+              />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Language</Form.Label>
+              <Form.Select
+                value={prefsForm.language}
+                onChange={(e) => setPrefsForm({ ...prefsForm, language: e.target.value as 'English' | 'French' | 'Arabic' })}
+                style={{ borderRadius: '10px' }}
+              >
+                <option value="English">English</option>
+                <option value="French">French</option>
+                <option value="Arabic">Arabic</option>
+              </Form.Select>
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Privacy</Form.Label>
+              <Form.Select
+                value={prefsForm.privacy}
+                onChange={(e) => setPrefsForm({ ...prefsForm, privacy: e.target.value as 'Public' | 'Friends only' | 'Private' })}
+                style={{ borderRadius: '10px' }}
+              >
+                <option value="Public">Public</option>
+                <option value="Friends only">Friends only</option>
+                <option value="Private">Private</option>
+              </Form.Select>
+            </Form.Group>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" style={{ borderRadius: '10px' }} onClick={() => setShowPreferencesModal(false)}>Cancel</Button>
+            <Button variant="danger" type="submit" style={{ borderRadius: '10px' }} disabled={prefsLoading}>
+              {prefsLoading ? 'Saving…' : 'Save Preferences'}
+            </Button>
+          </Modal.Footer>
+        </Form>
       </Modal>
     </div>
   );
