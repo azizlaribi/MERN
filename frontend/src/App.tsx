@@ -15,6 +15,7 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminUsers from './pages/admin/Adminusers';
 import AdminTrips from './pages/admin/AdminTrips';
 import Messages from './pages/messenger/Messages';
+import Profile from './pages/profile/Profile';
 
 
 const App: React.FC = () => {
@@ -33,7 +34,8 @@ const App: React.FC = () => {
         <Route path="/trips/my-bookings" element={<PrivateRoute requiredRole="user"><MyBookings /></PrivateRoute>} />
         <Route path="/trips/:tripId" element={<PrivateRoute requiredRole="user"><TripDetails /></PrivateRoute>} />
         <Route path="/messages" element={<PrivateRoute requiredRole="user"><Messages /></PrivateRoute>} />
-<Route path="/messages/:userId" element={<PrivateRoute requiredRole="user"><Messages /></PrivateRoute>} />
+        <Route path="/messages/:userId" element={<PrivateRoute requiredRole="user"><Messages /></PrivateRoute>} />
+        <Route path="/profile" element={<PrivateRoute requiredRole="user"><Profile /></PrivateRoute>} />
         {/* Admin routes */}
         <Route path="/admin/dashboard" element={<PrivateRoute requiredRole="admin"><AdminDashboard /></PrivateRoute>} />
         <Route path="/admin/users" element={<PrivateRoute requiredRole="admin"><AdminUsers /></PrivateRoute>} />
