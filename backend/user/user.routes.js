@@ -1,9 +1,33 @@
 const express=require('express')
 const  User=require('./User');
 const mongoose = require('mongoose');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const Trip = require('../trip/Trip');
 
 const router=express.Router();
 const { adminAuthorization,authentication,checkTokenExists } = require('../middlewares/authMiddleware');
+
+// ── Multer setup for profile photo uploads ──
+const uploadsDir = path.join(__dirname, '..', 'uploads');
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
+const storage = multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, uploadsDir),
+    filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        cb(null, `user-${req.user.userId}-${Date.now()}${ext}`);
+    }
+});
+const upload = multer({
+    storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+    fileFilter: (_req, file, cb) => {
+        if (/^image\/(jpeg|png|gif|webp)$/.test(file.mimetype)) cb(null, true);
+        else cb(new Error('Only image files are allowed'));
+    }
+});
 
 
 router.get('/all',[adminAuthorization,checkTokenExists],async (req,res)=>{
@@ -152,4 +176,178 @@ router.put('/edit/:id',  checkTokenExists, async (req, res) => {
         res.status(500).json({ error: 'Failed to update user' });
     }
 });
+
+// ============= CHANGE PASSWORD =============
+router.post('/change-password', authentication, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const { currentPassword, newPassword } = req.body;
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ error: 'Current and new passwords are required' });
+        }
+        if (newPassword.length < 6) {
+            return res.status(400).json({ error: 'New password must be at least 6 characters' });
+        }
+
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        if (user.isGoogleAuth) {
+            return res.status(400).json({ error: 'Google accounts cannot change password here' });
+        }
+
+        const isMatch = await user.comparePassword(currentPassword);
+        if (!isMatch) {
+            return res.status(400).json({ error: 'Current password is incorrect' });
+        }
+
+        user.password = newPassword;
+        await user.save();
+
+        res.status(200).json({ message: 'Password changed successfully' });
+    } catch (error) {
+        console.error('Change password error:', error);
+        res.status(500).json({ error: 'Failed to change password' });
+    }
+});
+
+// ============= DELETE OWN ACCOUNT =============
+router.delete('/delete-account', authentication, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Cancel upcoming trips created by the user
+        await Trip.updateMany(
+            { creator: userId, status: 'upcoming' },
+            { status: 'cancelled' }
+        );
+
+        // Remove user from passengers in all trips
+        await Trip.updateMany(
+            { 'passengers.userId': userId },
+            { $pull: { passengers: { userId } } }
+        );
+
+        await User.findByIdAndDelete(userId);
+        res.status(200).json({ message: 'Account deleted successfully' });
+    } catch (error) {
+        console.error('Delete account error:', error);
+        res.status(500).json({ error: 'Failed to delete account' });
+    }
+});
+
+// ============= USER STATS =============
+router.get('/stats', authentication, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+
+        const [tripsCreated, tripsAsPassenger, user] = await Promise.all([
+            Trip.countDocuments({ creator: userId }),
+            Trip.find({ 'passengers.userId': userId }),
+            User.findById(userId).select('rating ratingCount')
+        ]);
+
+        // Total amount paid on booked trips
+        let totalSavings = 0;
+        tripsAsPassenger.forEach(trip => {
+            const booking = trip.passengers.find(p => String(p.userId) === String(userId));
+            if (booking) totalSavings += trip.pricePerSeat * booking.seatsBooked;
+        });
+
+        res.status(200).json({
+            tripsCreated,
+            tripsTaken: tripsAsPassenger.length,
+            totalSavings,
+            rating: user && user.ratingCount > 0 ? (user.rating / user.ratingCount).toFixed(1) : null
+        });
+    } catch (error) {
+        console.error('User stats error:', error);
+        res.status(500).json({ error: 'Failed to fetch stats' });
+    }
+});
+
+// ============= UPLOAD PROFILE PHOTO =============
+router.put('/upload-photo', authentication, upload.single('photo'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
+
+        const userId = req.user.userId;
+        const baseUrl = process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`;
+        const pictureUrl = `${baseUrl}/uploads/${req.file.filename}`;
+
+        // Delete old photo file if it was uploaded locally
+        const user = await User.findById(userId);
+        if (user && user.picture && user.picture.includes('/uploads/')) {
+            const oldFilename = user.picture.split('/uploads/')[1];
+            const oldPath = path.join(uploadsDir, oldFilename);
+            try {
+                if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+            } catch (unlinkErr) {
+                console.error('Failed to delete old profile photo:', unlinkErr);
+            }
+        }
+
+        const updatedUser = await User.findByIdAndUpdate(
+            userId,
+            { picture: pictureUrl },
+            { new: true }
+        ).select('-password -resetPasswordToken -resetPasswordExpires');
+
+        res.status(200).json({ message: 'Photo updated successfully', user: updatedUser });
+    } catch (error) {
+        console.error('Upload photo error:', error);
+        res.status(500).json({ error: 'Failed to upload photo' });
+    }
+});
+
+// ============= UPDATE PREFERENCES =============
+router.put('/preferences', authentication, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const { emailNotifications, language, privacy } = req.body;
+
+        const allowedLanguages = ['English', 'French', 'Arabic'];
+        const allowedPrivacy = ['Public', 'Friends only', 'Private'];
+
+        const update = {};
+        if (emailNotifications !== undefined) update['preferences.emailNotifications'] = !!emailNotifications;
+        if (language !== undefined) {
+            if (!allowedLanguages.includes(language)) {
+                return res.status(400).json({ error: 'Invalid language value' });
+            }
+            update['preferences.language'] = language;
+        }
+        if (privacy !== undefined) {
+            if (!allowedPrivacy.includes(privacy)) {
+                return res.status(400).json({ error: 'Invalid privacy value' });
+            }
+            update['preferences.privacy'] = privacy;
+        }
+
+        const updatedUser = await User.findByIdAndUpdate(
+            userId,
+            update,
+            { new: true, runValidators: true }
+        ).select('-password -resetPasswordToken -resetPasswordExpires');
+
+        if (!updatedUser) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        res.status(200).json({ message: 'Preferences updated successfully', user: updatedUser });
+    } catch (error) {
+        console.error('Update preferences error:', error);
+        res.status(500).json({ error: 'Failed to update preferences' });
+    }
+});
+
 module.exports=router

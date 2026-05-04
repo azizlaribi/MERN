@@ -17,7 +17,14 @@ const userSchema=new mongoose.Schema({
     },
     password:String,
     resetPasswordToken: String,
-    resetPasswordExpires: Date
+    resetPasswordExpires: Date,
+    rating: { type: Number, default: 0 },
+    ratingCount: { type: Number, default: 0 },
+    preferences: {
+        emailNotifications: { type: Boolean, default: true },
+        language: { type: String, enum: ['English', 'French', 'Arabic'], default: 'English' },
+        privacy: { type: String, enum: ['Public', 'Friends only', 'Private'], default: 'Friends only' }
+    }
 },{ timestamps: true });
 userSchema.pre('save',async function(next){
     if(this.isModified('password')){

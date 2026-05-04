@@ -30,6 +30,20 @@ export interface User {
   isGoogleAuth?: boolean;
   createdAt?: string;
   updatedAt?: string;
+  rating?: number;
+  ratingCount?: number;
+  preferences?: {
+    emailNotifications: boolean;
+    language: 'English' | 'French' | 'Arabic';
+    privacy: 'Public' | 'Friends only' | 'Private';
+  };
+}
+
+export interface UserStats {
+  tripsCreated: number;
+  tripsTaken: number;
+  totalSavings: number;
+  rating: string | null;
 }
 
 export const userService = {
@@ -110,21 +124,63 @@ export const userService = {
     }
   },
 
-  // Get user statistics
-  async getUserStatistics() {
+  // Get user statistics (trips created/taken, savings, rating)
+  async getUserStats(): Promise<UserStats> {
     try {
-      const totalUsers = await this.getNumberOfUsers();
-      const adminUsers = await this.getAllAdmins();
-      const regularUsers = await this.getAllUsers();
-
-      return {
-        totalUsers,
-        adminCount: adminUsers.length,
-        regularUserCount: regularUsers.length,
-        activeUsers: [...adminUsers, ...regularUsers].filter((u) => u.isActive).length,
-      };
+      const response = await api.get('/users/stats');
+      return response.data;
     } catch (error) {
-      console.error('Error fetching statistics:', error);
+      console.error('Error fetching user stats:', error);
+      throw error;
+    }
+  },
+
+  // Change password (authenticated user)
+  async changePassword(currentPassword: string, newPassword: string): Promise<{ message: string }> {
+    try {
+      const response = await api.post('/users/change-password', { currentPassword, newPassword });
+      return response.data;
+    } catch (error) {
+      console.error('Error changing password:', error);
+      throw error;
+    }
+  },
+
+  // Delete own account
+  async deleteOwnAccount(): Promise<{ message: string }> {
+    try {
+      const response = await api.delete('/users/delete-account');
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting account:', error);
+      throw error;
+    }
+  },
+
+  // Upload profile photo
+  async uploadPhoto(file: File): Promise<{ message: string; user: User }> {
+    try {
+      const formData = new FormData();
+      formData.append('photo', file);
+      const response = await api.put('/users/upload-photo', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error uploading photo:', error);
+      throw error;
+    }
+  },
+
+  // Update preferences
+  async updatePreferences(
+    prefs: Partial<User['preferences']>
+  ): Promise<{ message: string; user: User }> {
+    try {
+      const response = await api.put('/users/preferences', prefs);
+      return response.data;
+    } catch (error) {
+      console.error('Error updating preferences:', error);
       throw error;
     }
   },
