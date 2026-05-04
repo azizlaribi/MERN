@@ -257,7 +257,7 @@ router.get('/stats', authentication, async (req, res) => {
         // Total amount paid on booked trips
         let totalSavings = 0;
         tripsAsPassenger.forEach(trip => {
-            const booking = trip.passengers.find(p => p.userId.toString() === userId);
+            const booking = trip.passengers.find(p => String(p.userId) === String(userId));
             if (booking) totalSavings += trip.pricePerSeat * booking.seatsBooked;
         });
 
@@ -281,14 +281,19 @@ router.put('/upload-photo', authentication, upload.single('photo'), async (req, 
         }
 
         const userId = req.user.userId;
-        const pictureUrl = `http://localhost:5000/uploads/${req.file.filename}`;
+        const baseUrl = process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`;
+        const pictureUrl = `${baseUrl}/uploads/${req.file.filename}`;
 
         // Delete old photo file if it was uploaded locally
         const user = await User.findById(userId);
-        if (user && user.picture && user.picture.startsWith('http://localhost:5000/uploads/')) {
+        if (user && user.picture && user.picture.includes('/uploads/')) {
             const oldFilename = user.picture.split('/uploads/')[1];
             const oldPath = path.join(uploadsDir, oldFilename);
-            if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+            try {
+                if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+            } catch (unlinkErr) {
+                console.error('Failed to delete old profile photo:', unlinkErr);
+            }
         }
 
         const updatedUser = await User.findByIdAndUpdate(
@@ -310,10 +315,23 @@ router.put('/preferences', authentication, async (req, res) => {
         const userId = req.user.userId;
         const { emailNotifications, language, privacy } = req.body;
 
+        const allowedLanguages = ['English', 'French', 'Arabic'];
+        const allowedPrivacy = ['Public', 'Friends only', 'Private'];
+
         const update = {};
-        if (emailNotifications !== undefined) update['preferences.emailNotifications'] = emailNotifications;
-        if (language !== undefined) update['preferences.language'] = language;
-        if (privacy !== undefined) update['preferences.privacy'] = privacy;
+        if (emailNotifications !== undefined) update['preferences.emailNotifications'] = !!emailNotifications;
+        if (language !== undefined) {
+            if (!allowedLanguages.includes(language)) {
+                return res.status(400).json({ error: 'Invalid language value' });
+            }
+            update['preferences.language'] = language;
+        }
+        if (privacy !== undefined) {
+            if (!allowedPrivacy.includes(privacy)) {
+                return res.status(400).json({ error: 'Invalid privacy value' });
+            }
+            update['preferences.privacy'] = privacy;
+        }
 
         const updatedUser = await User.findByIdAndUpdate(
             userId,
