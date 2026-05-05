@@ -32,6 +32,10 @@ export interface CreateTripData {
   allowSmoking?: boolean;
   allowMusic?: boolean;
   waypoints?: Array<{ location: string; latitude: number; longitude: number }>;
+  departureLat?: number;
+  departureLng?: number;
+  destinationLat?: number;
+  destinationLng?: number;
 }
 
 export interface TripFilters {

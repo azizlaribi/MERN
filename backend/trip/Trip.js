@@ -118,6 +118,22 @@ const tripSchema = new mongoose.Schema(
         longitude: Number,
       },
     ],
+
+    departureLat: {
+      type: Number,
+    },
+
+    departureLng: {
+      type: Number,
+    },
+
+    destinationLat: {
+      type: Number,
+    },
+
+    destinationLng: {
+      type: Number,
+    },
   },
   { timestamps: true }
 );

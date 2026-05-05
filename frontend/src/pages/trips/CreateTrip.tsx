@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Form, Button, Container, Row, Col, Card, Alert } from 'react-bootstrap';
+import { Form, Button, Container, Row, Col, Card, Alert, Badge } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
-import { FaCar, FaMapMarkerAlt, FaCalendarAlt, FaMoneyBill, FaInfoCircle, FaPaw, FaSmoking, FaMusic, FaArrowLeft } from 'react-icons/fa';
+import { FaCar, FaMapMarkerAlt, FaCalendarAlt, FaMoneyBill, FaInfoCircle, FaPaw, FaSmoking, FaMusic, FaArrowLeft, FaMap, FaTimes } from 'react-icons/fa';
 import { tripService } from '../../services/tripService';
 import Sidebar from '../../components/Sidebar';
 import { TUNISIA_CITIES } from '../../constants/cities';
+import MapPickerModal, { type PickedLocation } from '../../components/MapPickerModal';
 
 /** Returns the current local datetime string in "YYYY-MM-DDTHH:MM" format (required by datetime-local min) */
 const getNowLocalDatetimeString = (): string => {
@@ -33,6 +34,13 @@ const CreateTrip: React.FC = () => {
     allowSmoking: false,
     allowMusic: true,
   });
+
+  // Map-picked locations (independent from the list select)
+  const [departureLocation, setDepartureLocation] = useState<PickedLocation | null>(null);
+  const [destinationLocation, setDestinationLocation] = useState<PickedLocation | null>(null);
+  // Which field currently has the map picker open
+  const [mapPickerField, setMapPickerField] = useState<'departure' | 'destination' | null>(null);
+
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
@@ -44,6 +52,21 @@ const CreateTrip: React.FC = () => {
       ...prev,
       [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
     }));
+    // Clear the map-picked location for the field being edited via the list
+    if (name === 'departure') setDepartureLocation(null);
+    if (name === 'destination') setDestinationLocation(null);
+  };
+
+  const handleMapConfirm = (location: PickedLocation) => {
+    if (mapPickerField === 'departure') {
+      setDepartureLocation(location);
+      // Clear the list-select value since map takes priority
+      setFormData(prev => ({ ...prev, departure: '' }));
+    } else if (mapPickerField === 'destination') {
+      setDestinationLocation(location);
+      setFormData(prev => ({ ...prev, destination: '' }));
+    }
+    setMapPickerField(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -51,6 +74,16 @@ const CreateTrip: React.FC = () => {
     setError('');
     setSuccess('');
     setLoading(true);
+
+    // Resolve effective departure / destination values
+    const effectiveDeparture = departureLocation ? departureLocation.address : formData.departure;
+    const effectiveDestination = destinationLocation ? destinationLocation.address : formData.destination;
+
+    if (!effectiveDeparture || !effectiveDestination) {
+      setError('Please select a departure and a destination (from the list or the map).');
+      setLoading(false);
+      return;
+    }
 
     try {
       // Validate departure time is in the future
@@ -60,7 +93,15 @@ const CreateTrip: React.FC = () => {
         return;
       }
 
-      await tripService.createTrip(formData);
+      await tripService.createTrip({
+        ...formData,
+        departure: effectiveDeparture,
+        destination: effectiveDestination,
+        departureLat: departureLocation?.lat,
+        departureLng: departureLocation?.lng,
+        destinationLat: destinationLocation?.lat,
+        destinationLng: destinationLocation?.lng,
+      });
       setSuccess('Trip created successfully!');
       setTimeout(() => {
         navigate('/trips/my-trips');
@@ -126,43 +167,117 @@ const CreateTrip: React.FC = () => {
                         <Col md={6}>
                           <Form.Group>
                             <Form.Label className="fw-semibold">Departure <span className="text-danger">*</span></Form.Label>
-                            <div className="position-relative">
-                              <FaMapMarkerAlt className="position-absolute top-50 start-0 translate-middle-y ms-3 text-muted" />
-                              <Form.Select
-                                name="departure"
-                                value={formData.departure}
-                                onChange={handleChange}
-                                required
-                                className="ps-5 py-2"
-                                style={{ borderRadius: '10px' }}
+                            {/* Map-picked location chip */}
+                            {departureLocation ? (
+                              <div
+                                className="d-flex align-items-start gap-2 p-2 border rounded"
+                                style={{ borderRadius: '10px', background: '#fff5f5' }}
                               >
-                                <option value="">Select city…</option>
-                                {TUNISIA_CITIES.map(city => (
-                                  <option key={city} value={city}>{city}</option>
-                                ))}
-                              </Form.Select>
-                            </div>
+                                <FaMapMarkerAlt className="text-danger mt-1 flex-shrink-0" />
+                                <div className="flex-grow-1" style={{ minWidth: 0 }}>
+                                  <div className="small fw-semibold text-dark" style={{ wordBreak: 'break-word' }}>
+                                    {departureLocation.address}
+                                  </div>
+                                  <Badge bg="danger" className="mt-1" style={{ fontSize: '11px' }}>
+                                    📍 Map selection
+                                  </Badge>
+                                </div>
+                                <Button
+                                  variant="link"
+                                  size="sm"
+                                  className="p-0 text-muted"
+                                  title="Clear map selection"
+                                  onClick={() => setDepartureLocation(null)}
+                                >
+                                  <FaTimes />
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="position-relative">
+                                <FaMapMarkerAlt className="position-absolute top-50 start-0 translate-middle-y ms-3 text-muted" />
+                                <Form.Select
+                                  name="departure"
+                                  value={formData.departure}
+                                  onChange={handleChange}
+                                  required={!departureLocation}
+                                  className="ps-5 py-2"
+                                  style={{ borderRadius: '10px' }}
+                                >
+                                  <option value="">Select city…</option>
+                                  {TUNISIA_CITIES.map(city => (
+                                    <option key={city} value={city}>{city}</option>
+                                  ))}
+                                </Form.Select>
+                              </div>
+                            )}
+                            <Button
+                              variant="outline-danger"
+                              size="sm"
+                              className="mt-2 d-flex align-items-center gap-1"
+                              style={{ borderRadius: '8px', fontSize: '13px' }}
+                              type="button"
+                              onClick={() => setMapPickerField('departure')}
+                            >
+                              <FaMap /> {departureLocation ? 'Change on Map' : 'Pick on Map'}
+                            </Button>
                           </Form.Group>
                         </Col>
                         <Col md={6}>
                           <Form.Group>
                             <Form.Label className="fw-semibold">Destination <span className="text-danger">*</span></Form.Label>
-                            <div className="position-relative">
-                              <FaMapMarkerAlt className="position-absolute top-50 start-0 translate-middle-y ms-3 text-muted" />
-                              <Form.Select
-                                name="destination"
-                                value={formData.destination}
-                                onChange={handleChange}
-                                required
-                                className="ps-5 py-2"
-                                style={{ borderRadius: '10px' }}
+                            {/* Map-picked location chip */}
+                            {destinationLocation ? (
+                              <div
+                                className="d-flex align-items-start gap-2 p-2 border rounded"
+                                style={{ borderRadius: '10px', background: '#fff5f5' }}
                               >
-                                <option value="">Select city…</option>
-                                {TUNISIA_CITIES.map(city => (
-                                  <option key={city} value={city}>{city}</option>
-                                ))}
-                              </Form.Select>
-                            </div>
+                                <FaMapMarkerAlt className="text-danger mt-1 flex-shrink-0" />
+                                <div className="flex-grow-1" style={{ minWidth: 0 }}>
+                                  <div className="small fw-semibold text-dark" style={{ wordBreak: 'break-word' }}>
+                                    {destinationLocation.address}
+                                  </div>
+                                  <Badge bg="danger" className="mt-1" style={{ fontSize: '11px' }}>
+                                    📍 Map selection
+                                  </Badge>
+                                </div>
+                                <Button
+                                  variant="link"
+                                  size="sm"
+                                  className="p-0 text-muted"
+                                  title="Clear map selection"
+                                  onClick={() => setDestinationLocation(null)}
+                                >
+                                  <FaTimes />
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="position-relative">
+                                <FaMapMarkerAlt className="position-absolute top-50 start-0 translate-middle-y ms-3 text-muted" />
+                                <Form.Select
+                                  name="destination"
+                                  value={formData.destination}
+                                  onChange={handleChange}
+                                  required={!destinationLocation}
+                                  className="ps-5 py-2"
+                                  style={{ borderRadius: '10px' }}
+                                >
+                                  <option value="">Select city…</option>
+                                  {TUNISIA_CITIES.map(city => (
+                                    <option key={city} value={city}>{city}</option>
+                                  ))}
+                                </Form.Select>
+                              </div>
+                            )}
+                            <Button
+                              variant="outline-danger"
+                              size="sm"
+                              className="mt-2 d-flex align-items-center gap-1"
+                              style={{ borderRadius: '8px', fontSize: '13px' }}
+                              type="button"
+                              onClick={() => setMapPickerField('destination')}
+                            >
+                              <FaMap /> {destinationLocation ? 'Change on Map' : 'Pick on Map'}
+                            </Button>
                           </Form.Group>
                         </Col>
                         <Col md={6}>
@@ -350,6 +465,14 @@ const CreateTrip: React.FC = () => {
           </Row>
         </Container>
       </div>
+
+      {/* Map Picker Modal */}
+      <MapPickerModal
+        isOpen={mapPickerField !== null}
+        onClose={() => setMapPickerField(null)}
+        onConfirm={handleMapConfirm}
+        fieldLabel={mapPickerField === 'departure' ? 'Departure' : 'Destination'}
+      />
     </div>
   );
 };
