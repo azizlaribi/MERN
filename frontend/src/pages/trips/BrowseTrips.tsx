@@ -7,6 +7,19 @@ import type { Trip } from '../../types/trip.types';
 import type { TripFilters } from '../../services/tripService';
 import Sidebar from '../../components/Sidebar';
 
+const TUNISIA_CITIES = [
+  'Tunis', 'Ariana', 'Ben Arous', 'Manouba', 'Bizerte', 'Béja',
+  'Jendouba', 'Kef', 'Siliana', 'Nabeul', 'Sousse', 'Monastir',
+  'Mahdia', 'Kairouan', 'Kasserine', 'Sidi Bouzid', 'Sfax', 'Gafsa',
+  'Tozeur', 'Kebili', 'Gabès', 'Medenine', 'Tataouine', 'Zaghouan',
+];
+
+/** Remove trips whose departure time is in the past */
+const filterFutureTrips = (trips: Trip[]): Trip[] => {
+  const now = new Date();
+  return trips.filter(trip => new Date(trip.departureTime) > now);
+};
+
 const BrowseTrips: React.FC = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [trips, setTrips] = useState<Trip[]>([]);
@@ -32,7 +45,7 @@ const BrowseTrips: React.FC = () => {
     setLoading(true);
     try {
       const data = await tripService.getAvailableTrips();
-      setTrips(data.trips);
+      setTrips(filterFutureTrips(data.trips));
     } catch (err: any) {
       setError('Failed to load trips');
     } finally {
@@ -44,7 +57,7 @@ const BrowseTrips: React.FC = () => {
     setLoading(true);
     try {
       const data = await tripService.advancedSearch(filters);
-      setTrips(data.trips);
+      setTrips(filterFutureTrips(data.trips));
     } catch (err: any) {
       setError('Search failed');
     } finally {
@@ -126,14 +139,17 @@ const BrowseTrips: React.FC = () => {
                     <Form.Label className="fw-semibold">From</Form.Label>
                     <div className="position-relative">
                       <FaMapMarkerAlt className="position-absolute top-50 start-0 translate-middle-y ms-3 text-muted" />
-                      <Form.Control
-                        type="text"
-                        placeholder="Departure city"
+                      <Form.Select
                         value={filters.departure}
                         onChange={(e) => setFilters({...filters, departure: e.target.value})}
                         className="ps-5 py-2"
                         style={{ borderRadius: '10px' }}
-                      />
+                      >
+                        <option value="">All cities</option>
+                        {TUNISIA_CITIES.map(city => (
+                          <option key={city} value={city}>{city}</option>
+                        ))}
+                      </Form.Select>
                     </div>
                   </Form.Group>
                 </Col>
@@ -142,14 +158,17 @@ const BrowseTrips: React.FC = () => {
                     <Form.Label className="fw-semibold">To</Form.Label>
                     <div className="position-relative">
                       <FaMapMarkerAlt className="position-absolute top-50 start-0 translate-middle-y ms-3 text-muted" />
-                      <Form.Control
-                        type="text"
-                        placeholder="Destination city"
+                      <Form.Select
                         value={filters.destination}
                         onChange={(e) => setFilters({...filters, destination: e.target.value})}
                         className="ps-5 py-2"
                         style={{ borderRadius: '10px' }}
-                      />
+                      >
+                        <option value="">All cities</option>
+                        {TUNISIA_CITIES.map(city => (
+                          <option key={city} value={city}>{city}</option>
+                        ))}
+                      </Form.Select>
                     </div>
                   </Form.Group>
                 </Col>

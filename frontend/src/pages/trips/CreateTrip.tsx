@@ -5,6 +5,22 @@ import { FaCar, FaMapMarkerAlt, FaCalendarAlt, FaMoneyBill, FaInfoCircle, FaPaw,
 import { tripService } from '../../services/tripService';
 import Sidebar from '../../components/Sidebar';
 
+const TUNISIA_CITIES = [
+  'Tunis', 'Ariana', 'Ben Arous', 'Manouba', 'Bizerte', 'Béja',
+  'Jendouba', 'Kef', 'Siliana', 'Nabeul', 'Sousse', 'Monastir',
+  'Mahdia', 'Kairouan', 'Kasserine', 'Sidi Bouzid', 'Sfax', 'Gafsa',
+  'Tozeur', 'Kebili', 'Gabès', 'Medenine', 'Tataouine', 'Zaghouan',
+];
+
+/** Returns the current local datetime string in "YYYY-MM-DDTHH:MM" format (required by datetime-local min) */
+const getNowLocalDatetimeString = (): string => {
+  const now = new Date();
+  now.setSeconds(0, 0);
+  const offset = now.getTimezoneOffset();
+  const local = new Date(now.getTime() - offset * 60_000);
+  return local.toISOString().slice(0, 16);
+};
+
 const CreateTrip: React.FC = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [formData, setFormData] = useState({
@@ -116,16 +132,19 @@ const CreateTrip: React.FC = () => {
                             <Form.Label className="fw-semibold">Departure <span className="text-danger">*</span></Form.Label>
                             <div className="position-relative">
                               <FaMapMarkerAlt className="position-absolute top-50 start-0 translate-middle-y ms-3 text-muted" />
-                              <Form.Control
-                                type="text"
+                              <Form.Select
                                 name="departure"
-                                placeholder="City or address"
                                 value={formData.departure}
                                 onChange={handleChange}
                                 required
                                 className="ps-5 py-2"
                                 style={{ borderRadius: '10px' }}
-                              />
+                              >
+                                <option value="">Select city…</option>
+                                {TUNISIA_CITIES.map(city => (
+                                  <option key={city} value={city}>{city}</option>
+                                ))}
+                              </Form.Select>
                             </div>
                           </Form.Group>
                         </Col>
@@ -134,16 +153,19 @@ const CreateTrip: React.FC = () => {
                             <Form.Label className="fw-semibold">Destination <span className="text-danger">*</span></Form.Label>
                             <div className="position-relative">
                               <FaMapMarkerAlt className="position-absolute top-50 start-0 translate-middle-y ms-3 text-muted" />
-                              <Form.Control
-                                type="text"
+                              <Form.Select
                                 name="destination"
-                                placeholder="City or address"
                                 value={formData.destination}
                                 onChange={handleChange}
                                 required
                                 className="ps-5 py-2"
                                 style={{ borderRadius: '10px' }}
-                              />
+                              >
+                                <option value="">Select city…</option>
+                                {TUNISIA_CITIES.map(city => (
+                                  <option key={city} value={city}>{city}</option>
+                                ))}
+                              </Form.Select>
                             </div>
                           </Form.Group>
                         </Col>
@@ -158,6 +180,7 @@ const CreateTrip: React.FC = () => {
                                 value={formData.departureTime}
                                 onChange={handleChange}
                                 required
+                                min={getNowLocalDatetimeString()}
                                 className="ps-5 py-2"
                                 style={{ borderRadius: '10px' }}
                               />
