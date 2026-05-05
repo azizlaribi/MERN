@@ -24,7 +24,11 @@ export interface Trip {
     rating?: number;
   };
   departure: string;
+  departureLat?: number;
+  departureLng?: number;
   destination: string;
+  destinationLat?: number;
+  destinationLng?: number;
   departureTime: string;
   carType: string;
   carModel: string;

@@ -30,7 +30,11 @@ router.post('/create', authentication, async (req, res) => {
   try {
     const { 
       departure, 
+      departureLat,
+      departureLng,
       destination, 
+      destinationLat,
+      destinationLng,
       departureTime, 
       carType, 
       carModel, 
@@ -69,7 +73,11 @@ router.post('/create', authentication, async (req, res) => {
     const newTrip = new Trip({
       creator: userId,
       departure,
+      departureLat: departureLat || null,
+      departureLng: departureLng || null,
       destination,
+      destinationLat: destinationLat || null,
+      destinationLng: destinationLng || null,
       departureTime,
       carType,
       carModel,
