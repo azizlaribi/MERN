@@ -5,16 +5,19 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { FaMapMarkerAlt, FaCheck, FaTimes } from 'react-icons/fa';
 
-// Fix Leaflet default marker icon broken by bundlers
+// Fix Leaflet default marker icon broken by bundlers (standard Vite/webpack workaround)
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
+const defaultMarkerIcon = L.icon({
   iconUrl: markerIcon,
   iconRetinaUrl: markerIcon2x,
   shadowUrl: markerShadow,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41],
 });
 
 export interface PickedLocation {
@@ -44,11 +47,16 @@ const MapClickHandler: React.FC<MapClickHandlerProps> = ({ onMapClick }) => {
 };
 
 const NOMINATIM_REVERSE_URL = 'https://nominatim.openstreetmap.org/reverse';
+// IMPORTANT: Replace with your own app name and contact when deploying
+const NOMINATIM_USER_AGENT = 'MERN-RideShare/1.0 (contact@example.com)';
 
 async function reverseGeocode(lat: number, lng: number): Promise<string> {
   const url = `${NOMINATIM_REVERSE_URL}?format=json&lat=${lat}&lon=${lng}&zoom=16&addressdetails=1`;
   const response = await fetch(url, {
-    headers: { 'Accept-Language': 'en' },
+    headers: {
+      'Accept-Language': 'en',
+      'User-Agent': NOMINATIM_USER_AGENT,
+    },
   });
   if (!response.ok) throw new Error('Reverse geocoding request failed');
   const data = await response.json();
@@ -73,7 +81,8 @@ const MapPickerModal: React.FC<MapPickerModalProps> = ({ isOpen, onClose, onConf
     try {
       const resolved = await reverseGeocode(lat, lng);
       setAddress(resolved);
-    } catch {
+    } catch (err) {
+      console.error('Reverse geocoding failed:', err);
       const fallback = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
       setGeocodeError('Could not resolve address. Coordinates will be used as label.');
       setAddress(fallback);
@@ -123,7 +132,7 @@ const MapPickerModal: React.FC<MapPickerModalProps> = ({ isOpen, onClose, onConf
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
             <MapClickHandler onMapClick={handleMapClick} />
-            {marker && <Marker position={[marker.lat, marker.lng]} />}
+            {marker && <Marker position={[marker.lat, marker.lng]} icon={defaultMarkerIcon} />}
           </MapContainer>
 
           {/* Hint overlay shown before any click */}
@@ -144,7 +153,7 @@ const MapPickerModal: React.FC<MapPickerModalProps> = ({ isOpen, onClose, onConf
                 whiteSpace: 'nowrap',
               }}
             >
-              🖱️ Click anywhere on the map to pick a location
+              Click anywhere on the map to pick a location
             </div>
           )}
         </div>

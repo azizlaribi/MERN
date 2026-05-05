@@ -178,8 +178,8 @@ const CreateTrip: React.FC = () => {
                                   <div className="small fw-semibold text-dark" style={{ wordBreak: 'break-word' }}>
                                     {departureLocation.address}
                                   </div>
-                                  <Badge bg="danger" className="mt-1" style={{ fontSize: '11px' }}>
-                                    📍 Map selection
+                                  <Badge bg="danger" className="mt-1 d-flex align-items-center gap-1" style={{ fontSize: '11px', width: 'fit-content' }}>
+                                    <FaMapMarkerAlt /> Map selection
                                   </Badge>
                                 </div>
                                 <Button
@@ -236,8 +236,8 @@ const CreateTrip: React.FC = () => {
                                   <div className="small fw-semibold text-dark" style={{ wordBreak: 'break-word' }}>
                                     {destinationLocation.address}
                                   </div>
-                                  <Badge bg="danger" className="mt-1" style={{ fontSize: '11px' }}>
-                                    📍 Map selection
+                                  <Badge bg="danger" className="mt-1 d-flex align-items-center gap-1" style={{ fontSize: '11px', width: 'fit-content' }}>
+                                    <FaMapMarkerAlt /> Map selection
                                   </Badge>
                                 </div>
                                 <Button
