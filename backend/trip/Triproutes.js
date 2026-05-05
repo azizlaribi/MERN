@@ -41,7 +41,11 @@ router.post('/create', authentication, async (req, res) => {
       allowPets, 
       allowSmoking, 
       allowMusic, 
-      waypoints 
+      waypoints,
+      departureLat,
+      departureLng,
+      destinationLat,
+      destinationLng,
     } = req.body;
 
     // Get user ID from req.user (set by authentication middleware)
@@ -83,6 +87,10 @@ router.post('/create', authentication, async (req, res) => {
       allowMusic: allowMusic !== undefined ? allowMusic : true,
       waypoints: waypoints || [],
       passengers: [],
+      ...(departureLat !== undefined && { departureLat }),
+      ...(departureLng !== undefined && { departureLng }),
+      ...(destinationLat !== undefined && { destinationLat }),
+      ...(destinationLng !== undefined && { destinationLng }),
     });
 
     await newTrip.save();
@@ -265,7 +273,7 @@ router.put('/:tripId', authentication, async (req, res) => {
       return res.status(403).json({ message: 'Only the trip creator can update it' });
     }
 
-    const { departure, destination, departureTime, carType, carModel, licensePlate, pricePerSeat, description, allowPets, allowSmoking, allowMusic, status } = req.body;
+    const { departure, destination, departureTime, carType, carModel, licensePlate, pricePerSeat, description, allowPets, allowSmoking, allowMusic, status, departureLat, departureLng, destinationLat, destinationLng } = req.body;
 
     if (departure) trip.departure = departure;
     if (destination) trip.destination = destination;
@@ -286,6 +294,10 @@ router.put('/:tripId', authentication, async (req, res) => {
     if (status && ['upcoming', 'in-progress', 'completed', 'cancelled'].includes(status)) {
       trip.status = status;
     }
+    if (departureLat !== undefined) trip.departureLat = departureLat;
+    if (departureLng !== undefined) trip.departureLng = departureLng;
+    if (destinationLat !== undefined) trip.destinationLat = destinationLat;
+    if (destinationLng !== undefined) trip.destinationLng = destinationLng;
 
     await trip.save();
     await trip.populate('creator', 'firstname lastname email phone');

@@ -39,6 +39,10 @@ export interface Trip {
   allowSmoking: boolean;
   allowMusic: boolean;
   waypoints?: Array<{ location: string; latitude: number; longitude: number }>;
+  departureLat?: number;
+  departureLng?: number;
+  destinationLat?: number;
+  destinationLng?: number;
   createdAt: string;
   updatedAt: string;
   totalBookedSeats?: number;
