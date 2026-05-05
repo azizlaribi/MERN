@@ -103,7 +103,7 @@ router.post('/create', authentication, async (req, res) => {
 router.get('/available', async (req, res) => {
   try {
     const { departure, destination, departureDate, carType } = req.query;
-    let filter = { status: 'upcoming', availableSeats: { $gt: 0 } };
+    let filter = { status: 'upcoming', availableSeats: { $gt: 0 }, departureTime: { $gt: new Date() } };
 
     if (departure) filter.departure = { $regex: departure, $options: 'i' };
     if (destination) filter.destination = { $regex: destination, $options: 'i' };
@@ -404,7 +404,7 @@ router.post('/search/advanced', async (req, res) => {
   try {
     const { departure, destination, departureDate, carType, maxPrice, minSeats } = req.body;
 
-    let filter = { status: 'upcoming', availableSeats: { $gt: 0 } };
+    let filter = { status: 'upcoming', availableSeats: { $gt: 0 }, departureTime: { $gt: new Date() } };
 
     if (departure) filter.departure = { $regex: departure, $options: 'i' };
     if (destination) filter.destination = { $regex: destination, $options: 'i' };

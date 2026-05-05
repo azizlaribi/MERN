@@ -163,7 +163,7 @@ export const userService = {
       const formData = new FormData();
       formData.append('photo', file);
       const response = await api.put('/users/upload-photo', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+        headers: { 'Content-Type': undefined },
       });
       return response.data;
     } catch (error) {

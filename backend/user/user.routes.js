@@ -67,11 +67,41 @@ router.get('/userbyId/:userId', authentication, async (req, res) => {
         res.status(500).send({ message: 'Error fetching user' });
     }
 });
+// ============= USER STATS =============
+router.get('/stats', authentication, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+
+        const [tripsCreated, tripsAsPassenger, user] = await Promise.all([
+            Trip.countDocuments({ creator: userId }),
+            Trip.find({ 'passengers.userId': userId }),
+            User.findById(userId).select('rating ratingCount')
+        ]);
+
+        // Total amount paid on booked trips
+        let totalSavings = 0;
+        tripsAsPassenger.forEach(trip => {
+            const booking = trip.passengers.find(p => String(p.userId) === String(userId));
+            if (booking) totalSavings += trip.pricePerSeat * booking.seatsBooked;
+        });
+
+        res.status(200).json({
+            tripsCreated,
+            tripsTaken: tripsAsPassenger.length,
+            totalSavings,
+            rating: user && user.ratingCount > 0 ? (user.rating / user.ratingCount).toFixed(1) : null
+        });
+    } catch (error) {
+        console.error('User stats error:', error);
+        res.status(500).json({ error: 'Failed to fetch stats' });
+    }
+});
+
 router.get('/:email',checkTokenExists,async (req,res)=>{
     try {
         const  user = await User.findOne({email:req.params.email})
         if(!user){
-            res.status(404).send({message:"user not found"})
+            return res.status(404).send({message:"user not found"})
         }
         res.send(user)
     }catch (error){
@@ -110,6 +140,35 @@ router.put('/isActive/:id', [adminAuthorization, checkTokenExists], async (req, 
         res.status(500).json({ error: errorMessage });
     }
 });
+// ============= DELETE OWN ACCOUNT =============
+router.delete('/delete-account', authentication, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Cancel upcoming trips created by the user
+        await Trip.updateMany(
+            { creator: userId, status: 'upcoming' },
+            { status: 'cancelled' }
+        );
+
+        // Remove user from passengers in all trips
+        await Trip.updateMany(
+            { 'passengers.userId': userId },
+            { $pull: { passengers: { userId } } }
+        );
+
+        await User.findByIdAndDelete(userId);
+        res.status(200).json({ message: 'Account deleted successfully' });
+    } catch (error) {
+        console.error('Delete account error:', error);
+        res.status(500).json({ error: 'Failed to delete account' });
+    }
+});
+
 router.delete('/delete/:id',[adminAuthorization,checkTokenExists],async (req,res)=>
 {
     try {
@@ -211,65 +270,6 @@ router.post('/change-password', authentication, async (req, res) => {
     } catch (error) {
         console.error('Change password error:', error);
         res.status(500).json({ error: 'Failed to change password' });
-    }
-});
-
-// ============= DELETE OWN ACCOUNT =============
-router.delete('/delete-account', authentication, async (req, res) => {
-    try {
-        const userId = req.user.userId;
-        const user = await User.findById(userId);
-        if (!user) {
-            return res.status(404).json({ error: 'User not found' });
-        }
-
-        // Cancel upcoming trips created by the user
-        await Trip.updateMany(
-            { creator: userId, status: 'upcoming' },
-            { status: 'cancelled' }
-        );
-
-        // Remove user from passengers in all trips
-        await Trip.updateMany(
-            { 'passengers.userId': userId },
-            { $pull: { passengers: { userId } } }
-        );
-
-        await User.findByIdAndDelete(userId);
-        res.status(200).json({ message: 'Account deleted successfully' });
-    } catch (error) {
-        console.error('Delete account error:', error);
-        res.status(500).json({ error: 'Failed to delete account' });
-    }
-});
-
-// ============= USER STATS =============
-router.get('/stats', authentication, async (req, res) => {
-    try {
-        const userId = req.user.userId;
-
-        const [tripsCreated, tripsAsPassenger, user] = await Promise.all([
-            Trip.countDocuments({ creator: userId }),
-            Trip.find({ 'passengers.userId': userId }),
-            User.findById(userId).select('rating ratingCount')
-        ]);
-
-        // Total amount paid on booked trips
-        let totalSavings = 0;
-        tripsAsPassenger.forEach(trip => {
-            const booking = trip.passengers.find(p => String(p.userId) === String(userId));
-            if (booking) totalSavings += trip.pricePerSeat * booking.seatsBooked;
-        });
-
-        res.status(200).json({
-            tripsCreated,
-            tripsTaken: tripsAsPassenger.length,
-            totalSavings,
-            rating: user && user.ratingCount > 0 ? (user.rating / user.ratingCount).toFixed(1) : null
-        });
-    } catch (error) {
-        console.error('User stats error:', error);
-        res.status(500).json({ error: 'Failed to fetch stats' });
     }
 });
 
