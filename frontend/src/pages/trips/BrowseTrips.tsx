@@ -6,13 +6,7 @@ import { tripService } from '../../services/tripService';
 import type { Trip } from '../../types/trip.types';
 import type { TripFilters } from '../../services/tripService';
 import Sidebar from '../../components/Sidebar';
-
-const TUNISIA_CITIES = [
-  'Tunis', 'Ariana', 'Ben Arous', 'Manouba', 'Bizerte', 'Béja',
-  'Jendouba', 'Kef', 'Siliana', 'Nabeul', 'Sousse', 'Monastir',
-  'Mahdia', 'Kairouan', 'Kasserine', 'Sidi Bouzid', 'Sfax', 'Gafsa',
-  'Tozeur', 'Kebili', 'Gabès', 'Medenine', 'Tataouine', 'Zaghouan',
-];
+import { TUNISIA_CITIES } from '../../constants/cities';
 
 /** Remove trips whose departure time is in the past */
 const filterFutureTrips = (trips: Trip[]): Trip[] => {

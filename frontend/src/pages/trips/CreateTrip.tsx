@@ -4,21 +4,17 @@ import { useNavigate } from 'react-router-dom';
 import { FaCar, FaMapMarkerAlt, FaCalendarAlt, FaMoneyBill, FaInfoCircle, FaPaw, FaSmoking, FaMusic, FaArrowLeft } from 'react-icons/fa';
 import { tripService } from '../../services/tripService';
 import Sidebar from '../../components/Sidebar';
-
-const TUNISIA_CITIES = [
-  'Tunis', 'Ariana', 'Ben Arous', 'Manouba', 'Bizerte', 'Béja',
-  'Jendouba', 'Kef', 'Siliana', 'Nabeul', 'Sousse', 'Monastir',
-  'Mahdia', 'Kairouan', 'Kasserine', 'Sidi Bouzid', 'Sfax', 'Gafsa',
-  'Tozeur', 'Kebili', 'Gabès', 'Medenine', 'Tataouine', 'Zaghouan',
-];
+import { TUNISIA_CITIES } from '../../constants/cities';
 
 /** Returns the current local datetime string in "YYYY-MM-DDTHH:MM" format (required by datetime-local min) */
 const getNowLocalDatetimeString = (): string => {
   const now = new Date();
-  now.setSeconds(0, 0);
-  const offset = now.getTimezoneOffset();
-  const local = new Date(now.getTime() - offset * 60_000);
-  return local.toISOString().slice(0, 16);
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
 };
 
 const CreateTrip: React.FC = () => {
